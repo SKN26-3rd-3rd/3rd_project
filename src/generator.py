@@ -1,12 +1,7 @@
-"""최종 응답 생성(Generator).
-
-system prompt + 검색 메타 + 후보 식당 리스트를 LLM에 넘겨
-최종 답변 문장을 생성한다. 세션별 대화 히스토리도 유지.
-"""
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -28,6 +23,7 @@ def get_llm() -> ChatOpenAI:
         model=SETTINGS.llm_model,
         temperature=0,
         api_key=SETTINGS.openai_api_key,
+        streaming=True,
     )
 
 
@@ -38,6 +34,8 @@ def generate_response(
     session_id: str = "default",
     route_payload: dict[str, Any] | None = None,
     connector_meta: dict[str, Any] | None = None,
+    stream: bool = False,
+    stream_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     prompt_rules = load_system_prompt()
     history = _SESSION_MESSAGES.setdefault(session_id, [])
@@ -76,8 +74,27 @@ def generate_response(
     ]
 
     llm = get_llm()
-    result = llm.invoke(messages)
-    response = result.content if hasattr(result, "content") else str(result)
+
+    if stream:
+        full_response = ""
+
+        for chunk in llm.stream(messages):
+            piece = chunk.content if hasattr(chunk, "content") else str(chunk)
+            if piece:
+                full_response += piece
+
+                if stream_callback is not None:
+                    stream_callback(full_response)
+                else:
+                    print(piece, end="", flush=True)
+
+        if stream_callback is None:
+            print()
+
+        response = full_response
+    else:
+        result = llm.invoke(messages)
+        response = result.content if hasattr(result, "content") else str(result)
 
     history.append(HumanMessage(content=question))
     history.append(AIMessage(content=response))

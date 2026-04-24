@@ -18,6 +18,8 @@ from .slot_extractor import embedding_slot_extract, fixed_search
 class GraphState(TypedDict, total=False):
     question: str
     session_id: str
+    stream: bool
+    stream_callback: Any
 
     route: Literal["embedding", "fixed"]
     route_payload: dict[str, str]
@@ -86,6 +88,8 @@ def generate_node(state: GraphState) -> GraphState:
     route = state.get("route", "embedding")
     route_payload = state.get("route_payload", {})
     restaurant_list = state.get("restaurant_list", [])
+    stream = state.get("stream", False)
+    stream_callback = state.get("stream_callback")
 
     connector_meta = {
         "restaurant_count": len(restaurant_list)
@@ -98,6 +102,8 @@ def generate_node(state: GraphState) -> GraphState:
         session_id=session_id,
         route_payload=route_payload,
         connector_meta=connector_meta,
+        stream=stream,
+        stream_callback=stream_callback,
     )
 
     return {
@@ -148,6 +154,8 @@ def get_graph():
 def run_qa(
     question: str,
     session_id: str = "default",
+    stream: bool = False,
+    stream_callback=None,
 ) -> dict[str, Any]:
     graph = get_graph()
 
@@ -155,6 +163,8 @@ def run_qa(
         {
             "question": question,
             "session_id": session_id,
+            "stream": stream,
+            "stream_callback": stream_callback,
         }
     )
 
